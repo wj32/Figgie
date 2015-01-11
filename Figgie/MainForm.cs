@@ -79,7 +79,7 @@ namespace Figgie
 
         private void UpdateHand()
         {
-            textHand.Text = HandToString(_game.Players[4].Hand);
+            textHand.Text = HandToString(_game.Players[4].Hand) + "\t\tCash: " + _game.Players[4].Cash.ToString();
         }
 
         private void MainForm_Load(object sender, EventArgs e)
@@ -140,8 +140,8 @@ namespace Figgie
                 WriteLine(GetPlayerName(sourceId) + "\t \"" + message + "\"");
                 string fillMessage =
                     buyerAtMarket
-                    ? " paid " + price.ToString() + " for " + suit.ToString()[0] + " from " + GetPlayerName(targetId)
-                    : " sold " + suit.ToString()[0] + " at " + price.ToString() + " to " + GetPlayerName(targetId);
+                    ? "paid " + price.ToString() + " for " + suit.ToString()[0] + " from " + GetPlayerName(targetId)
+                    : "sold " + suit.ToString()[0] + " at " + price.ToString() + " to " + GetPlayerName(targetId);
                 WriteLine("\t" + GetPlayerName(sourceId) + " " + fillMessage);
 
                 UpdateHand();
@@ -225,7 +225,15 @@ namespace Figgie
 
                     command = command.Substring(2);
 
-                    if (command.StartsWith("AT ") || command.StartsWith("A "))
+                    if (char.IsDigit(command[0]) && (command.Contains(" AT ") || command.Contains(" A ")))
+                    {
+                        string[] s = command.Split(' ');
+                        int bid = int.Parse(s[0]);
+                        int ask = int.Parse(s[2]);
+                        _userPlayer.Game.Market(suit).Bid(bid);
+                        _userPlayer.Game.Market(suit).Ask(ask);
+                    }
+                    else if (command.StartsWith("AT ") || command.StartsWith("A "))
                     {
                         int price = int.Parse(command.Split(' ')[1]);
                         _userPlayer.Game.Market(suit).Ask(price);

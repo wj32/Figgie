@@ -134,6 +134,10 @@ namespace Figgie
 
                 if (BestBid == null || price > BestBid.Item1)
                 {
+                    // Cross
+                    if (BestAsk != null && price >= BestAsk.Item1)
+                        return Buy(playerId);
+
                     BestBid = new Tuple<int, int>(price, playerId);
                     Game.BroadcastOnBidAsk(playerId, Suit, true, price);
                     return true;
@@ -152,6 +156,10 @@ namespace Figgie
 
                 if (BestAsk == null || price < BestAsk.Item1)
                 {
+                    // Cross
+                    if (BestBid != null && price <= BestBid.Item1)
+                        return Sell(playerId);
+
                     BestAsk = new Tuple<int, int>(price, playerId);
                     Game.BroadcastOnBidAsk(playerId, Suit, false, price);
                     return true;
@@ -192,6 +200,7 @@ namespace Figgie
                     return false;
 
                 Settle(buyerId, sellerId, true, price);
+                BestBid = null;
                 BestAsk = null;
 
                 return true;
@@ -213,6 +222,7 @@ namespace Figgie
 
                 Settle(buyerId, sellerId, false, price);
                 BestBid = null;
+                BestAsk = null;
 
                 return true;
             }
