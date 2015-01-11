@@ -153,11 +153,14 @@ namespace Figgie
             if (++_secondsElapsed == GameDurationInSeconds)
             {
                 timerGame.Stop();
-                WriteLine("\nGAME OVER.");
-                WriteLine("The goal suit is " + _game.GoalSuit.ToString() + "!");
 
                 lock (_game.Lock)
                 {
+                    WriteLine();
+                    WriteLine("GAME OVER.");
+                    WriteLine("The goal suit is " + _game.GoalSuit.ToString() + "!");
+                    WriteLine();
+
                     int pot = 200;
 
                     foreach (var player in _game.Players)
@@ -192,6 +195,8 @@ namespace Figgie
                         player.Cash.ToString() + " cash and their hand is");
                     WriteLine("\t\t\t" + HandToString(player.Hand));
                 }
+
+                UpdateHand();
             }
             else
             {

@@ -157,7 +157,7 @@ namespace Figgie
             {
                 // We got a fill, so adjust our fair.
                 _suitGoalPr[(int)suit] += (buyerAtMarket ? -1 : 1) * 0.05;
-                _suitGoalPrConf[(int)suit] -= 0.03;
+                _suitGoalPrConf[(int)suit] -= 0.07;
                 Normalize();
                 ActOnFair();
             }
