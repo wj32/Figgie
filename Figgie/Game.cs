@@ -84,6 +84,9 @@ namespace Figgie
     public interface IPlayer
     {
         void Initialize(IPlayerGame game);
+        void OnBidAsk(int playerId, Suit suit, bool bid, int price);
+        void OnOut(int playerId, Suit suit);
+        void OnFill(int buyerId, int sellerId, bool buyerAtMarket, Suit suit, int price);
     }
 
     public interface IPlayerGame
@@ -126,12 +129,13 @@ namespace Figgie
 
             public bool Bid(int price, int playerId)
             {
-                if (Game._ended)
+                if (Game._ended || price < 0)
                     return false;
 
                 if (BestBid == null || price > BestBid.Item1)
                 {
                     BestBid = new Tuple<int, int>(price, playerId);
+                    Game.BroadcastOnBidAsk(playerId, Suit, true, price);
                     return true;
                 }
 
@@ -140,7 +144,7 @@ namespace Figgie
 
             public bool Ask(int price, int playerId)
             {
-                if (Game._ended)
+                if (Game._ended || price < 0)
                     return false;
                 // No short selling allowed.
                 if (Game._players[playerId].Hand.Count(Suit) <= 0)
@@ -149,6 +153,7 @@ namespace Figgie
                 if (BestAsk == null || price < BestAsk.Item1)
                 {
                     BestAsk = new Tuple<int, int>(price, playerId);
+                    Game.BroadcastOnBidAsk(playerId, Suit, false, price);
                     return true;
                 }
 
@@ -163,14 +168,16 @@ namespace Figgie
                     BestBid = null;
                 if (BestAsk != null && BestAsk.Item2 == playerId)
                     BestAsk = null;
+                Game.BroadcastOnOut(playerId, Suit);
             }
 
-            private void Settle(int buyerId, int sellerId, int price)
+            private void Settle(int buyerId, int sellerId, bool buyerAtMarket, int price)
             {
                 Game._players[buyerId].Cash -= price;
                 Game._players[sellerId].Cash += price;
                 Game._players[buyerId].Hand.Add(Suit);
                 Game._players[sellerId].Hand.Remove(Suit);
+                Game.BroadcastOnFill(buyerId, sellerId, buyerAtMarket, Suit, price);
             }
 
             public bool Buy(int buyerId)
@@ -184,7 +191,7 @@ namespace Figgie
                 if (sellerId == buyerId)
                     return false;
 
-                Settle(buyerId, sellerId, price);
+                Settle(buyerId, sellerId, true, price);
                 BestAsk = null;
 
                 return true;
@@ -204,7 +211,7 @@ namespace Figgie
                 if (buyerId == sellerId)
                     return false;
 
-                Settle(buyerId, sellerId, price);
+                Settle(buyerId, sellerId, false, price);
                 BestBid = null;
 
                 return true;
@@ -360,6 +367,10 @@ namespace Figgie
                     PlayerGame = new PlayerGame(this, i)
                 };
                 cards.RemoveRange(0, handSize);
+
+                this.OnBidAsk += players[i].OnBidAsk;
+                this.OnOut += players[i].OnOut;
+                this.OnFill += players[i].OnFill;
             }
 
             if (cards.Count != 0)
@@ -376,6 +387,16 @@ namespace Figgie
             get { return _players; }
         }
 
+        public Suit GoalSuit
+        {
+            get { return _goalSuit; }
+        }
+
+        protected Random Random
+        {
+            get { return _random; }
+        }
+
         private void Shuffle<T>(IList<T> list)
         {
             int n = list.Count;
@@ -389,7 +410,13 @@ namespace Figgie
             }
         }
 
-        private void End()
+        public virtual void Start()
+        {
+            foreach (var player in _players)
+                player.ExternalPlayer.Initialize(player.PlayerGame);
+        }
+
+        public virtual void End()
         {
             if (_ended)
                 return;
@@ -414,13 +441,39 @@ namespace Figgie
 
             foreach (var p in bestPlayers)
             {
-                int payoff = System.Math.Min(pot, bonus);
-                pot -= payoff;
-                p.Item1.Cash += payoff;
+                pot -= bonus;
+                p.Item1.Cash += bonus;
             }
+        }
 
-            if (pot != 0)
-                throw new InvalidOperationException("state");
+        public delegate void OnBidAskHandler(int playerId, Suit suit, bool bid, int price);
+        public event OnBidAskHandler OnBidAsk;
+
+        public delegate void OnOutHandler(int playerId, Suit suit);
+        public event OnOutHandler OnOut;
+
+        public delegate void OnFillHandler(int buyerId, int sellerId, bool buyerAtMarket, Suit suit, int price);
+        public event OnFillHandler OnFill;
+
+        private void BroadcastOnBidAsk(int playerId, Suit suit, bool bid, int price)
+        {
+            var handler = OnBidAsk;
+            if (handler != null)
+                handler(playerId, suit, bid, price);
+        }
+
+        private void BroadcastOnOut(int playerId, Suit suit)
+        {
+            var handler = OnOut;
+            if (handler != null)
+                handler(playerId, suit);
+        }
+
+        private void BroadcastOnFill(int buyerId, int sellerId, bool buyerAtMarket, Suit suit, int price)
+        {
+            var handler = OnFill;
+            if (handler != null)
+                handler(buyerId, sellerId, buyerAtMarket, suit, price);
         }
     }
 }
