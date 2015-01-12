@@ -13,6 +13,7 @@ namespace Figgie
         private int _handSize;
         private double[] _suitGoalPr;
         private double[] _suitGoalPrConf;
+        private DateTime _lastAct;
 
         private double InitialSuitGoalPr(int count)
         {
@@ -56,6 +57,7 @@ namespace Figgie
         {
             _random = new Random();
             _game = game;
+            _lastAct = DateTime.FromFileTimeUtc(0);
             _handSize = 40 / game.NumberOfPlayers;
 
             _suitGoalPr = new double[Suits.All.Count];
@@ -68,19 +70,47 @@ namespace Figgie
             Normalize();
 
             ActOnFair();
+            PeriodicActOnFair();
+        }
+
+        private void PeriodicActOnFair()
+        {
+            Task.Delay(_random.Next(5000, 9000)).ContinueWith(t =>
+                {
+                    ActOnFair();
+                    PeriodicActOnFair();
+                });
         }
 
         private void ActOnFair()
         {
+            DateTime now = DateTime.UtcNow;
+
+            if ((now - _lastAct).TotalSeconds < 4)
+                return;
+
+            _lastAct = now;
+
             foreach (var suit in Suits.All)
             {
                 double fairLow = (_suitGoalPr[(int)suit] - _suitGoalPrConf[(int)suit]) * 10;
                 double fairHigh = (_suitGoalPr[(int)suit] + _suitGoalPrConf[(int)suit]) * 10;
 
-                if (_suitGoalPr[(int)suit] > 0.8)
+                if (_suitGoalPr[(int)suit] > 0.05)
                 {
                     // Adjust for bonus
-                    double adj = (_suitGoalPr[(int)suit] - 0.8) * 40;
+                    double adj = (_suitGoalPr[(int)suit] - 0.05) * 12;
+                    int count = _game.Hand.Count(suit);
+
+                    if (count <= 3)
+                        adj /= 1.5;
+                    else if (count >= 6)
+                        adj /= 2;
+                    else if (count >= 7)
+                        adj /= 3;
+
+                    adj += 2;
+
                     fairLow += adj;
                     fairHigh += adj;
                 }
@@ -91,12 +121,12 @@ namespace Figgie
 
                 if (_game.Market(suit).BestBid.GetValueOrDefault(0) > fairMid)
                 {
-                    if (_random.Next(0, 4) == 0)
+                    if (_random.Next(0, 6) == 0)
                         hit = true;
                 }
                 else if (_game.Market(suit).BestAsk.GetValueOrDefault(int.MaxValue) < fairMid)
                 {
-                    if (_random.Next(0, 4) == 0)
+                    if (_random.Next(0, 6) == 0)
                         lift = true;
                 }
 
@@ -112,8 +142,13 @@ namespace Figgie
                 {
                     Task.Delay(_random.Next(500, 8000)).ContinueWith(t =>
                     {
-                        _game.Market(suit).Bid(ToPrice(fairLow));
-                        _game.Market(suit).Ask(ToPrice(fairHigh));
+                        int bid = ToPrice(fairLow);
+                        int ask = ToPrice(fairHigh);
+
+                        if (bid != 0)
+                            _game.Market(suit).Bid(bid);
+                        if (ask != 0)
+                            _game.Market(suit).Ask(ask);
                     });
                 }
             }
@@ -126,16 +161,32 @@ namespace Figgie
 
             double impliedPr = (double)price / 10;
 
-            if (bid && _suitGoalPr[(int)suit] < impliedPr)
+            if (bid)
             {
-                _suitGoalPr[(int)suit] += 0.05;
-                _suitGoalPrConf[(int)suit] += 0.03;
+                if (_suitGoalPr[(int)suit] < impliedPr)
+                {
+                    _suitGoalPr[(int)suit] += 0.03;
+                    _suitGoalPrConf[(int)suit] += 0.03;
+                }
+                else
+                {
+                    _suitGoalPrConf[(int)suit] -= 0.03;
+                }
+
                 Normalize();
             }
-            else if (!bid && _suitGoalPr[(int)suit] > impliedPr)
+            else
             {
-                _suitGoalPr[(int)suit] -= 0.05;
-                _suitGoalPrConf[(int)suit] += 0.03;
+                if (_suitGoalPr[(int)suit] > impliedPr)
+                {
+                    _suitGoalPr[(int)suit] -= 0.03;
+                    _suitGoalPrConf[(int)suit] += 0.03;
+                }
+                else
+                {
+                    _suitGoalPrConf[(int)suit] -= 0.03;
+                }
+
                 Normalize();
             }
 
@@ -156,8 +207,8 @@ namespace Figgie
                 (sellerId == _game.PlayerId && buyerAtMarket))
             {
                 // We got a fill, so adjust our fair.
-                _suitGoalPr[(int)suit] += (buyerAtMarket ? -1 : 1) * 0.05;
-                _suitGoalPrConf[(int)suit] -= 0.07;
+                _suitGoalPr[(int)suit] += (buyerAtMarket ? -1 : 1) * 0.03;
+                _suitGoalPrConf[(int)suit] += 0.01;
                 Normalize();
                 ActOnFair();
             }
